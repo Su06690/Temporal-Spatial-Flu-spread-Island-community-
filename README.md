@@ -1,4 +1,4 @@
-# Temporal-Spatial-Flu
+# Temporal-Spatial-Flu-Island-Community
 Study the spread of flu within the semi-isolated island community 
 
 The dataset consisits of influenza-like illness cases and rapid influenza diagnostic test (RIDT) confirmed influenza A and B cases from 2007/08- 2013/14.
