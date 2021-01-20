@@ -135,7 +135,7 @@ print(summary(out2, burnin = 5000)$b)
 
 
 ## ----prepare_plot, warning = FALSE-------------------------------------------------------------------------------
-# We create groups of cluster size: initialise the breaks for each group
+# I have modified the breakdown of the cluster size for visualization purpose
 group_cluster <- c(1,2, 5,50, 100, 1000) - 1
 
 # Grouped cluster size distribution in each run
@@ -161,7 +161,7 @@ arrows(b[2,], clust_infer2["1st Qu.",], b[2,], clust_infer2["3rd Qu.",],
 legend("topright", fill = grey.colors(2), bty = "n",
        legend = c("Inferred import status",  "Simulated dataset"))
 
-
+---------------#####My dataset has no information on infector ID and cluster number or generation ######------------------------
 ## ----index_infer, warning = FALSE--------------------------------------------------------------------------------
 #' Title: Compute the proportion of iterations in the outbreaker() output 
 #` where the inferred index matches the actual index in dt_cases
@@ -172,61 +172,61 @@ legend("topright", fill = grey.colors(2), bty = "n",
 #'
 #' @return Numeric vector showing the proportion of iterations pointing to
 #' the correct index case
-index_infer <- function(finalData, out, burnin){
+#index_infer <- function(finalData, out, burnin){
   ## Generate the data frame listing every infector:
   # Select rows above burnin, and columns describing who infected whom
-  out_index <- out[out$step > burnin, grep("alpha", colnames(out))]
+  # out_index <- out[out$step > burnin, grep("alpha", colnames(out))]
   # ID of each infector
-  ID_index <- matrix(finalData[unlist(out_index), ID], ncol = nrow(dt_cases))
+  #ID_index <- matrix(finalData[unlist(out_index), ID], ncol = nrow(dt_cases))
   # Match inferred (ID_index) and actual infector (column infector_ID)
-  match_infer_data <- t(ID_index) == dt_cases$infector_ID
+ # match_infer_data <- t(ID_index) == dt_cases$infector_ID
   # If a case is rightly inferred as an ancestor, set match to TRUE
-  match_infer_data[is.na(t(ID_index)) & is.na(dt_cases$infector_ID)] <- TRUE
-  prop_correct <- rowSums(match_infer_data, na.rm = T)/ncol(match_infer_data)
+  #match_infer_data[is.na(t(ID_index)) & is.na(dt_cases$infector_ID)] <- TRUE
+  #prop_correct <- rowSums(match_infer_data, na.rm = T)/ncol(match_infer_data)
   
   return(prop_correct)
 }
 # Same as index_infer, except it returns the proportion of inferred indexes
 # who are in the same reference cluster as the case
-index_clust <- function(dt_cases, out, burnin){
+#index_clust <- function(dt_cases, out, burnin){
   ## Generate the data frame listing every infector:
   # Select rows above burnin, and columns describing who infected whom
-  out_index <- out[out$step > burnin, grep("alpha", colnames(out))]
+ # out_index <- out[out$step > burnin, grep("alpha", colnames(out))]
   # cluster of each infector
-  clust_index <- matrix(dt_cases[unlist(out_index), cluster], 
+  #clust_index <- matrix(dt_cases[unlist(out_index), cluster], 
                         ncol = nrow(dt_cases))
   # Match inferred (cluster_index) and actual cluster (column cluster)
-  match_infer_data <- t(clust_index) == dt_cases$cluster
+  #match_infer_data <- t(clust_index) == dt_cases$cluster
   # Exclude ancestors
-  match_infer_data <- match_infer_data[!is.na(dt_cases$infector_ID),]
+  #match_infer_data <- match_infer_data[!is.na(dt_cases$infector_ID),]
   
   
-  prop_correct <- rowSums(match_infer_data, na.rm = T)/ncol(match_infer_data)
+  #prop_correct <- rowSums(match_infer_data, na.rm = T)/ncol(match_infer_data)
   
-  return(prop_correct)
-}
+  #return(prop_correct)
+#}
 # Run index_infer for each model
-index_infer1 <- index_infer(dt_cases = dt_cases, out = out1, burnin = 5000)
-index_infer2 <- index_infer(dt_cases = dt_cases, out = out2, burnin = 5000)
+#index_infer1 <- index_infer(dt_cases = dt_cases, out = out1, burnin = 5000)
+#index_infer2 <- index_infer(dt_cases = dt_cases, out = out2, burnin = 5000)
 # Run index_clust for each model
-index_clust1 <- index_clust(dt_cases = dt_cases, out = out1, burnin = 5000)
-index_clust2 <- index_clust(dt_cases = dt_cases, out = out2, burnin = 5000)
+#index_clust1 <- index_clust(dt_cases = dt_cases, out = out1, burnin = 5000)
+#index_clust2 <- index_clust(dt_cases = dt_cases, out = out2, burnin = 5000)
 
 
 ## ----plot index_infer, warning = FALSE, fig.width = 7, fig.height = 3, fig.cap = "Figure 4: Panel A: Proportion of iterations with the correct index for each case; Panel B: Proportion of iterations where the index is from the correct cluster"----
 # Plot the sorted proportion in each model
-par(bty = "n", mfrow = c(1, 2), mar = c(5,4,2,0), oma = c(0, 0, 0, 0))
+#par(bty = "n", mfrow = c(1, 2), mar = c(5,4,2,0), oma = c(0, 0, 0, 0))
 # Panel A: Perfect match
-plot(sort(index_infer1), type = "l", ylab = "Proportion of iterations", xlab = "Case", 
-     main =  "A", las=1, col = grey.colors(3)[1], lwd = 3)
-lines(sort(index_infer2), col = grey.colors(3)[2], lwd = 3)
+#plot(sort(index_infer1), type = "l", ylab = "Proportion of iterations", xlab = "Case", 
+ #    main =  "A", las=1, col = grey.colors(3)[1], lwd = 3)
+#lines(sort(index_infer2), col = grey.colors(3)[2], lwd = 3)
 
 # Panel B: Close match
-plot(sort(index_clust1), type = "l", xlab = "Case", ylab = "", 
-     main =  "B", las=1, col = grey.colors(3)[1], lwd = 3)
-lines(sort(index_clust2), col = grey.colors(3)[2], lwd = 3)
-legend("bottomright", col = grey.colors(3)[1:2], lwd = 3, bty = "n",
-       legend = c("Inferred import status","Known import status"))
+#plot(sort(index_clust1), type = "l", xlab = "Case", ylab = "", 
+ #    main =  "B", las=1, col = grey.colors(3)[1], lwd = 3)
+#lines(sort(index_clust2), col = grey.colors(3)[2], lwd = 3)
+#legend("bottomright", col = grey.colors(3)[1:2], lwd = 3, bty = "n",
+ #      legend = c("Inferred import status","Known import status"))
 
 
 ## ----import_sf_file, message = FALSE, warning = FALSE, fig.width = 6.5, fig.height = 2.5-------------------------
@@ -442,7 +442,7 @@ dist_mat_stouffer[dist_mat_stouffer == -1] <- max(dist_mat_stouffer) * 2
 
 ## }
 
-
+##### I didnt try anything from here
 ## ----moves_priors_data_conf, message = FALSE, warning = FALSE----------------------------------------------------
 # Edit the lists of movements and priors
 moves3 <- custom_moves(a = cpp_stouffer)
