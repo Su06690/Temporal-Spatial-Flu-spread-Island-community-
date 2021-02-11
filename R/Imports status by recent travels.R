@@ -150,13 +150,16 @@ data3 <- outbreaker_data(dates = finalData$visit_date,
 
 config3 <- create_config(data = data3, 
                          find_import = TRUE, #inference of import status
-                         n_iter = 20000, 
-                         sample_every = 50, # 1 in 50 iterations is kept
-                         burnin = 5000,  
+                         n_iter = 20000, #Iteration number: main run
+                         n_iter_import = 10000, #Iteration number: short run
+                         burnin = 5000, #burnin period: first run
+                         outlier_relative = T, #Absolute / relative threshold 
+                         outlier_threshold = 0.9, #Value of the threshold
                          prior_a = c(.2, 5),
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
                          verbatim =TRUE
 )
+
 
 # Run model 3
 out3 <- outbreaker(data = data3, config = config3, moves = moves, 
@@ -218,18 +221,18 @@ map1 <- st_read(dsn="/Users/suhan/Project/kamigoto/Kamigoto shape file", layer="
 map1$X_CODE <- as.numeric(map1$X_CODE)
 map1$Y_CODE <- as.numeric(map1$Y_CODE)
 map2 <- map1
+map3 <- map1
 map1$model <- "Model 1"
 map2$model <- "Model 2"
-
+map3$model <- "Model 3"
 
 ## ----n_import_reg_per_case, warning = FALSE----------------------------------------------------------------------
 # Add the proportion of iterations in model 1 where each case is an import
 finalData<- as.data.table(finalData)
 finalData[, prop_recent_travel1 := summary(out1, burnin = 5000)$tree$import]
-# Add the proportion of iterations in model 2 where each case is an import
+# Add the proportion of iterations in model 2  &3where each case is an import
 finalData[, prop_recent_travel2 := summary(out2, burnin = 5000)$tree$import]
-
-
+finalData[, prop_recent_travel3 := summary(out3, burnin = 5000)$tree$import]
 ## ----n_import_reg_per_reg, warning = FALSE-----------------------------------------------------------------------
 # Number of imports per region in model 1
 prop_reg1 <- finalData[, .(prop_per_reg = sum(prop_recent_travel1)), 
@@ -237,19 +240,22 @@ prop_reg1 <- finalData[, .(prop_per_reg = sum(prop_recent_travel1)),
 # Number of imports per region in model 2
 prop_reg2 <- finalData[, .(prop_per_reg = sum(prop_recent_travel2)), 
                       by = district]$prop_per_reg
-names(prop_reg1) <- names(prop_reg2) <- unique(finalData$district)
+# Number of imports per region in model 3
+prop_reg3 <- finalData[, .(prop_per_reg = sum(prop_recent_travel3)), 
+                       by = district]$prop_per_reg
+names(prop_reg1) <- names(prop_reg2) <- names(prop_reg3) <- unique(finalData$district)
 
 # Add the number of imports in each region to the maps
 map1$prop_reg <- prop_reg1[as.character(map1$S_NAME)]
 map2$prop_reg <- prop_reg2[as.character(map2$S_NAME)]
-
+map3$prop_reg <- prop_reg3[as.character(map3$S_NAME)]
 
 ## ----create_map1, warning = FALSE, fig.width = 6.5, fig.height = 2.5, fig.cap = "Figure 5: Average number of imported cases per census tract, regions where no case was reported are shown in grey."----
 # Merge maps
-maps <- rbind(map1, map2)
+maps <- rbind(map1, map2,map3)
 
-maps <- maps[maps$X_CODE > lim_lon[1] & maps$X_CODE < lim_lon[2] & 
-               maps$Y_CODE > lim_lat[1] & maps$Y_CODE< lim_lat[2],]
+maps <- maps[maps$X_CODE > lim_lon[1] & maps$X_CODE < lim_lon[2] & maps$X_CODE < lim_lon[3]& 
+               maps$Y_CODE > lim_lat[1] & maps$Y_CODE< lim_lat[2] & maps$Y_CODE< lim_lat[3],]
 
 # Plot: number of imports per region, two panels
 ggplot(maps) +  geom_sf(aes(fill = prop_reg)) + facet_grid(~model)  +     
@@ -288,22 +294,27 @@ n_sec_per_reg <- function(finalData, out, burnin){
 ## Generate the number of secondary cases per case in each region
 n_sec_tot1 <- n_sec_per_reg(finalData = finalData, out = out1, burnin = 5000)
 n_sec_tot2 <- n_sec_per_reg(finalData = finalData, out = out2, burnin = 5000)
+n_sec_tot3 <- n_sec_per_reg(finalData = finalData, out = out3, burnin = 5000)
 ## Compute the median in each model
 n_sec1 <- apply(n_sec_tot1[,-1], 1, median)
 n_sec2 <- apply(n_sec_tot2[,-1], 1, median)
-names(n_sec1) <- names(n_sec2) <- unique(finalData$district)
+n_sec3 <- apply(n_sec_tot3[,-1], 1, median)
+names(n_sec1) <- names(n_sec2) <- names(n_sec2) <- unique(finalData$district)
 ## Add to the matrices describing the maps
 map1$n_sec <- as.numeric(n_sec1[as.character(map1$S_NAME)])
 map2$n_sec <- as.numeric(n_sec2[as.character(map2$S_NAME)])
+map3$n_sec <- as.numeric(n_sec3[as.character(map3$S_NAME)])
 
 
 ## ----create_maps2, warning = FALSE, fig.width = 6.5, fig.height = 2.5, fig.cap = "Figure 6: Median number of secondary transmission per case in each census tract"----
 # Merge maps
-maps_n_sec <- rbind(map1, map2)
+maps_n_sec <- rbind(map1, map2,map3)
 maps_n_sec <- maps_n_sec[maps_n_sec$INTPTLON > lim_lon[1] &
                            maps_n_sec$INTPTLON < lim_lon[2] &
+                           maps_n_sec$INTPTLON < lim_lon[3] &
                            maps_n_sec$INTPTLAT > lim_lat[1] & 
-                           maps_n_sec$INTPTLAT < lim_lat[2],]
+                           maps_n_sec$INTPTLAT > lim_lat[2] & 
+                           maps_n_sec$INTPTLAT < lim_lat[3],]
 # Plot the geographical distribution of the number of secondary cases
 ggplot(maps_n_sec) +  geom_sf(aes(fill = n_sec)) + facet_grid(~model)  +     
   scale_fill_gradient2(na.value = "lightgrey", mid = "lightblue",
