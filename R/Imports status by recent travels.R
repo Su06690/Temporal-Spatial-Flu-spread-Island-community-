@@ -78,9 +78,26 @@ priors <- custom_priors()
 finalData<-subset(df_all_positive,!(is.na(df_all_positive ["district"])))
 finalData<- finalData[order(as.Date(finalData$visit_date, format="%Y/%m/%d")),]
 
+n_missing_case<- sum(is.na(finalData$onset_date))
+
+dist_onset_visit<- table(finalData$visit_date - finalData$onset_date)/sum(!is.na(finalData$onset_date))
+
+
+library(tidyverse)
+inferred_duration<- sample(x=names(dist_onset_visit)%>% as.numeric,
+                           size= n_missing_case,
+                           replace = T,
+                           prob=dist_onset_visit)
+
+finalData[is.na(finalData$onset_date),
+          "onset_date"]<- finalData[is.na(finalData$onset_date), "visit_date"]-
+  inferred_duration
+
+finalData<- finalData[order(as.Date(finalData$onset_date, format="%Y/%m/%d")),]
+
 
 # Data and config, model 
-data1 <- outbreaker_data(dates = finalData$visit_date , #try with visit dates here since the Onset dates were not recorded for first
+data1 <- outbreaker_data(dates = finalData$onset_date, #try with visit dates here since the Onset dates were not recorded for first
                          age_group = finalData$age_gp , #Age group
                          region = finalData$district, #Location
                          #genotype = dt_cases$Genotype, #Genotype
@@ -96,8 +113,8 @@ config1 <- create_config(data = data1,
                          n_iter = 20000, #Iteration number: main run
                          n_iter_import = 10000, #Iteration number: short run
                          burnin = 5000, #burnin period: first run
-                         outlier_relative = T, #Absolute / relative threshold 
-                         outlier_threshold = 0.9, #Value of the threshold
+                         outlier_relative = F, #Absolute / relative threshold 
+                         outlier_threshold =0.05, #Value of the threshold
                          prior_a = c(.2, 5),
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
                          verbatim =TRUE
@@ -108,7 +125,7 @@ out1 <- outbreaker(data = data1, config = config1, moves = moves,
                    priors = priors, likelihoods = likelihoods)
 
 # Set data and config for model 2
-data2 <- outbreaker_data(dates = finalData$visit_date, 
+data2 <- outbreaker_data(dates = finalData$onset_date, 
                          age_group = finalData$age_gp,
                          region = finalData$district,
                          #genotype = dt_cases$Genotype, 
@@ -136,7 +153,7 @@ out2 <- outbreaker(data = data2, config = config2, moves = moves,
 
 
 # Set data and config for model 3
-data3 <- outbreaker_data(dates = finalData$visit_date, 
+data3 <- outbreaker_data(dates = finalData$onset_date, 
                          age_group = finalData$age_gp,
                          region = finalData$district,
                          #genotype = dt_cases$Genotype, 
@@ -145,7 +162,7 @@ data3 <- outbreaker_data(dates = finalData$visit_date,
                          a_dens = a_dens,
                          population = pop_vect, 
                          distance = dist_mat,
-                         import = finalData$import #Import status of the cases
+                         import = finalData$recent_travel #Import status of the cases
 )
 
 config3 <- create_config(data = data3, 
@@ -153,13 +170,12 @@ config3 <- create_config(data = data3,
                          n_iter = 20000, #Iteration number: main run
                          n_iter_import = 10000, #Iteration number: short run
                          burnin = 5000, #burnin period: first run
-                         outlier_relative = T, #Absolute / relative threshold 
-                         outlier_threshold = 0.9, #Value of the threshold
+                         outlier_relative = F, #Absolute / relative threshold 
+                         outlier_threshold = 0.05, #Value of the threshold
                          prior_a = c(.2, 5),
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
                          verbatim =TRUE
 )
-
 
 # Run model 3
 out3 <- outbreaker(data = data3, config = config3, moves = moves, 
@@ -209,7 +225,7 @@ arrows(b[2,], clust_infer2["1st Qu.",], b[2,], clust_infer2["3rd Qu.",],
 arrows(b[3,], clust_infer3["1st Qu.",], b[3,], clust_infer3["3rd Qu.",], 
        angle = 90, code = 3, length = 0.1)
 # Add legend
-legend("topright", fill = grey.colors(2), bty = "n",
+legend("topright", fill = grey.colors(3), bty = "n",
        legend = c("Inferred import status",  "Epi import", "Epi import and inferred import"))
 
 ## ----import_sf_file, message = FALSE, warning = FALSE, fig.width = 6.5, fig.height = 2.5-------------------------
@@ -252,19 +268,18 @@ map3$prop_reg <- prop_reg3[as.character(map3$S_NAME)]
 
 ## ----create_map1, warning = FALSE, fig.width = 6.5, fig.height = 2.5, fig.cap = "Figure 5: Average number of imported cases per census tract, regions where no case was reported are shown in grey."----
 # Merge maps
-maps <- rbind(map1, map2,map3)
+maps <- rbind(map1, map2, map3)
 
-maps <- maps[maps$X_CODE > lim_lon[1] & maps$X_CODE < lim_lon[2] & maps$X_CODE < lim_lon[3]& 
-               maps$Y_CODE > lim_lat[1] & maps$Y_CODE< lim_lat[2] & maps$Y_CODE< lim_lat[3],]
+#maps <- maps[maps$X_CODE > lim_lon[1] & maps$X_CODE < lim_lon[2] & maps$X_CODE < lim_lon[3]& 
+#               maps$Y_CODE > lim_lat[1] & maps$Y_CODE< lim_lat[2] & maps$Y_CODE< lim_lat[3],]
+
 
 # Plot: number of imports per region, two panels
 ggplot(maps) +  geom_sf(aes(fill = prop_reg)) + facet_grid(~model)  +     
-  scale_fill_gradient2(na.value = "lightgrey", midpoint = 0.8, 
-                       breaks = c(0, 0.5, 1, 1.5), name = "Nb imports",
+  scale_fill_gradient2(na.value = "lightgrey", name = "Nb imports",
                        low = "white", mid = "lightblue", high = "darkblue") + 
   #coord_sf(xlim = c(-83.8, -82.2), ylim = c(40.2, 41.3)) +
   theme_classic(base_size = 9)
-
 
 ## ----n_sec_region, warning = FALSE-------------------------------------------------------------------------------
 #' Title: Compute the number of secondary cases per case in each region
@@ -299,7 +314,7 @@ n_sec_tot3 <- n_sec_per_reg(finalData = finalData, out = out3, burnin = 5000)
 n_sec1 <- apply(n_sec_tot1[,-1], 1, median)
 n_sec2 <- apply(n_sec_tot2[,-1], 1, median)
 n_sec3 <- apply(n_sec_tot3[,-1], 1, median)
-names(n_sec1) <- names(n_sec2) <- names(n_sec2) <- unique(finalData$district)
+names(n_sec1) <- names(n_sec2) <- names(n_sec3) <- unique(finalData$district)
 ## Add to the matrices describing the maps
 map1$n_sec <- as.numeric(n_sec1[as.character(map1$S_NAME)])
 map2$n_sec <- as.numeric(n_sec2[as.character(map2$S_NAME)])
@@ -308,13 +323,12 @@ map3$n_sec <- as.numeric(n_sec3[as.character(map3$S_NAME)])
 
 ## ----create_maps2, warning = FALSE, fig.width = 6.5, fig.height = 2.5, fig.cap = "Figure 6: Median number of secondary transmission per case in each census tract"----
 # Merge maps
-maps_n_sec <- rbind(map1, map2,map3)
+maps_n_sec <- rbind(map1, map2, map3)
 maps_n_sec <- maps_n_sec[maps_n_sec$INTPTLON > lim_lon[1] &
                            maps_n_sec$INTPTLON < lim_lon[2] &
-                           maps_n_sec$INTPTLON < lim_lon[3] &
                            maps_n_sec$INTPTLAT > lim_lat[1] & 
-                           maps_n_sec$INTPTLAT > lim_lat[2] & 
-                           maps_n_sec$INTPTLAT < lim_lat[3],]
+                           maps_n_sec$INTPTLAT < lim_lat[2],]
+
 # Plot the geographical distribution of the number of secondary cases
 ggplot(maps_n_sec) +  geom_sf(aes(fill = n_sec)) + facet_grid(~model)  +     
   scale_fill_gradient2(na.value = "lightgrey", mid = "lightblue",
@@ -322,3 +336,5 @@ ggplot(maps_n_sec) +  geom_sf(aes(fill = n_sec)) + facet_grid(~model)  +
                        breaks = seq(0, 5, 0.5),name = "Sec cases") +
   #coord_sf(xlim = c(-83.8, -82.2), ylim = c(40.2, 41.3)) +
   theme_classic(base_size = 9) 
+
+
