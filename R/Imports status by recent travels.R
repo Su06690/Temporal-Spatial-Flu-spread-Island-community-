@@ -75,6 +75,8 @@ priors <- custom_priors()
 
 ##***added the folder district 
 ###removing the variables with NA for the district
+
+#correct district in data_clean_df_all_positive first
 finalData<-subset(df_all_positive,!(is.na(df_all_positive ["district"])))
 finalData<- finalData[order(as.Date(finalData$visit_date, format="%Y/%m/%d")),]
 
@@ -110,14 +112,17 @@ data1 <- outbreaker_data(dates = finalData$onset_date, #try with visit dates her
 
 
 config1 <- create_config(data = data1, 
+                         find_import = TRUE,
                          n_iter = 20000, #Iteration number: main run
                          n_iter_import = 10000, #Iteration number: short run
+                         sample_every = 50, 
                          burnin = 5000, #burnin period: first run
-                         outlier_relative = F, #Absolute / relative threshold 
-                         outlier_threshold =0.05, #Value of the threshold
+                         outlier_relative = T, #Absolute(F) / relative threshold 
+                         outlier_threshold =0.95, #Value of the threshold
                          prior_a = c(.2, 5),
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
-                         verbatim =TRUE
+                         verbatim =TRUE,
+                         outlier_plot = T
 )
 
 # Run model 1:no inference of the importation status of cases,
@@ -144,7 +149,8 @@ config2 <- create_config(data = data2,
                          prior_a = c(.2, 5),
                          burnin = 5000,  
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
-                         verbatim =TRUE
+                         verbatim =TRUE,
+                         outlier_plot = T
 )
 
 # Run model 2
@@ -162,7 +168,7 @@ data3 <- outbreaker_data(dates = finalData$onset_date,
                          a_dens = a_dens,
                          population = pop_vect, 
                          distance = dist_mat,
-                         import = finalData$recent_travel #Import status of the cases
+                         import = finalData$recent_travel=="TRUE"  #Import status of the cases
 )
 
 config3 <- create_config(data = data3, 
@@ -170,11 +176,12 @@ config3 <- create_config(data = data3,
                          n_iter = 20000, #Iteration number: main run
                          n_iter_import = 10000, #Iteration number: short run
                          burnin = 5000, #burnin period: first run
-                         outlier_relative = F, #Absolute / relative threshold 
-                         outlier_threshold = 0.05, #Value of the threshold
+                         outlier_relative = T, #Absolute / relative threshold 
+                         outlier_threshold = 0.95, #Value of the threshold
                          prior_a = c(.2, 5),
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
-                         verbatim =TRUE
+                         verbatim =TRUE,
+                         outlier_plot = T
 )
 
 # Run model 3
@@ -244,7 +251,9 @@ map3$model <- "Model 3"
 
 ## ----n_import_reg_per_case, warning = FALSE----------------------------------------------------------------------
 # Add the proportion of iterations in model 1 where each case is an import
+library(data.table)
 finalData<- as.data.table(finalData)
+finalData[, season := lubridate::year(visit_date)]
 finalData[, prop_recent_travel1 := summary(out1, burnin = 5000)$tree$import]
 # Add the proportion of iterations in model 2  &3where each case is an import
 finalData[, prop_recent_travel2 := summary(out2, burnin = 5000)$tree$import]
@@ -258,7 +267,7 @@ prop_reg2 <- finalData[, .(prop_per_reg = sum(prop_recent_travel2)),
                       by = district]$prop_per_reg
 # Number of imports per region in model 3
 prop_reg3 <- finalData[, .(prop_per_reg = sum(prop_recent_travel3)), 
-                       by = district]$prop_per_reg
+                       by =district]$prop_per_reg
 names(prop_reg1) <- names(prop_reg2) <- names(prop_reg3) <- unique(finalData$district)
 
 # Add the number of imports in each region to the maps
@@ -282,15 +291,6 @@ ggplot(maps) +  geom_sf(aes(fill = prop_reg)) + facet_grid(~model)  +
   theme_classic(base_size = 9)
 
 ## ----n_sec_region, warning = FALSE-------------------------------------------------------------------------------
-#' Title: Compute the number of secondary cases per case in each region
-#'
-#' @param dt_cases: reference dataset
-#' @param out: Matrix output of outbreaker()
-#' @param burnin: Numeric, length of the burnin phase
-#'
-#' @return A numeric matrix: the first column is the census tract ID, the
-#' other columns show the number of secondary cases per case. Each row 
-#' corresponds to a different iteration.
 n_sec_per_reg <- function(finalData, out, burnin){
   ## Number of secondary cases per case
   n_sec <- apply(out[out$step > burnin, grep("alpha", colnames(out))], 1, 
