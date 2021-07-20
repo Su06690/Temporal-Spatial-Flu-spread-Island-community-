@@ -176,8 +176,8 @@ config3 <- create_config(data = data3,
                          n_iter = 20000, #Iteration number: main run
                          n_iter_import = 10000, #Iteration number: short run
                          burnin = 5000, #burnin period: first run
-                         outlier_relative = T, #Absolute / relative threshold 
-                         outlier_threshold = 0.95, #Value of the threshold
+                         outlier_relative = F, #Absolute / relative threshold 
+                         outlier_threshold = 0.05, #Value of the threshold
                          prior_a = c(.2, 5),
                          delta=8, #tmeporal threshold for the pre-clsutering , short 
                          verbatim =TRUE,
@@ -252,43 +252,84 @@ map3$model <- "Model 3"
 ## ----n_import_reg_per_case, warning = FALSE----------------------------------------------------------------------
 # Add the proportion of iterations in model 1 where each case is an import
 library(data.table)
+
+#finalData[, season := lubridate::year(visit_date)]
+year_start <- year(min(finalData$visit_date))
+year_end <- year(max(finalData$visit_date))
+years <- year_start:year_end
+mid_year <- as.Date(paste(years,"07-01",sep="-"))
+season <- paste(years[-length(years)],str_sub(years,start=3,end=4)[-1],sep='/')
+finalData<- mutate(finalData,season=cut(visit_date,breaks=mid_year,labels=season))
 finalData<- as.data.table(finalData)
-finalData[, season := lubridate::year(visit_date)]
 finalData[, prop_recent_travel1 := summary(out1, burnin = 5000)$tree$import]
 # Add the proportion of iterations in model 2  &3where each case is an import
 finalData[, prop_recent_travel2 := summary(out2, burnin = 5000)$tree$import]
 finalData[, prop_recent_travel3 := summary(out3, burnin = 5000)$tree$import]
 ## ----n_import_reg_per_reg, warning = FALSE-----------------------------------------------------------------------
 # Number of imports per region in model 1
-prop_reg1 <- finalData[, .(prop_per_reg = sum(prop_recent_travel1)), 
-                      by = district]$prop_per_reg
-# Number of imports per region in model 2
-prop_reg2 <- finalData[, .(prop_per_reg = sum(prop_recent_travel2)), 
-                      by = district]$prop_per_reg
-# Number of imports per region in model 3
-prop_reg3 <- finalData[, .(prop_per_reg = sum(prop_recent_travel3)), 
-                       by =district]$prop_per_reg
-names(prop_reg1) <- names(prop_reg2) <- names(prop_reg3) <- unique(finalData$district)
+prop_region_yr1<- finalData[, lapply(.SD, sum), by = .(district, season), .SDcols = "prop_recent_travel1"]
+prop_region_yr1<- reshape(prop_region_yr1, idvar = "district", timevar = "season", direction = "wide")
+prop_region_yr1<- prop_region_yr1 %>% rename(
+  "2010/11" = "prop_recent_travel1.2010/11",
+  "2011/12" = "prop_recent_travel1.2011/12",
+  "2012/13" ="prop_recent_travel1.2012/13", 
+  "2013/14" ="prop_recent_travel1.2013/14")
 
-# Add the number of imports in each region to the maps
-map1$prop_reg <- prop_reg1[as.character(map1$S_NAME)]
-map2$prop_reg <- prop_reg2[as.character(map2$S_NAME)]
-map3$prop_reg <- prop_reg3[as.character(map3$S_NAME)]
+#prop_region_yr1[is.na(prop_region_yr1)] <- 0
+names(prop_region_yr1)[1] <- "S_NAME"
+prop_region_yr1<- melt(prop_region_yr1, id.vars=c("S_NAME"))
 
-## ----create_map1, warning = FALSE, fig.width = 6.5, fig.height = 2.5, fig.cap = "Figure 5: Average number of imported cases per census tract, regions where no case was reported are shown in grey."----
-# Merge maps
-maps <- rbind(map1, map2, map3)
+prop_region_yr2<- finalData[, lapply(.SD, sum), by = .(district, season), .SDcols = "prop_recent_travel2"]
+prop_region_yr2<- reshape(prop_region_yr2, idvar = "district", timevar = "season", direction = "wide")
+prop_region_yr2<- prop_region_yr2 %>% rename(
+  "2010/11" = "prop_recent_travel2.2010/11",
+  "2011/12" = "prop_recent_travel2.2011/12",
+  "2012/13" ="prop_recent_travel2.2012/13", 
+  "2013/14" ="prop_recent_travel2.2013/14")
+#prop_region_yr2[is.na(prop_region_yr2)] <- 0
+names(prop_region_yr2)[1] <- "S_NAME"
+prop_region_yr2<- melt(prop_region_yr2, id.vars=c("S_NAME"))
 
-#maps <- maps[maps$X_CODE > lim_lon[1] & maps$X_CODE < lim_lon[2] & maps$X_CODE < lim_lon[3]& 
-#               maps$Y_CODE > lim_lat[1] & maps$Y_CODE< lim_lat[2] & maps$Y_CODE< lim_lat[3],]
+prop_region_yr3<- finalData[, lapply(.SD, sum), by = .(district, season), .SDcols = "prop_recent_travel3"]
+prop_region_yr3<- reshape(prop_region_yr3, idvar = "district", timevar = "season", direction = "wide")
+prop_region_yr3<- prop_region_yr3 %>% rename(
+  "2010/11" = "prop_recent_travel3.2010/11",
+  "2011/12" = "prop_recent_travel3.2011/12",
+  "2012/13" ="prop_recent_travel3.2012/13", 
+  "2013/14" ="prop_recent_travel3.2013/14")
+#prop_region_yr3[is.na(prop_region_yr3)] <- 0
+names(prop_region_yr3)[1] <- "S_NAME"
+prop_region_yr3<- melt(prop_region_yr3, id.vars=c("S_NAME"))
+
+library(tidyverse)
+#prop_reg_yr1<- prop_region_yr1 %>% remove_rownames %>% column_to_rownames(var="district")
+#prop_reg_yr2<- prop_region_yr2 %>% remove_rownames %>% column_to_rownames(var="district")
+#prop_reg_yr3<- prop_region_yr3 %>% remove_rownames %>% column_to_rownames(var="district")
+model1_map<- merge(map1, prop_region_yr1)
+model2_map<- merge(map2, prop_region_yr2)
+model3_map<- merge(map3, prop_region_yr3)
+
+maps_combined <- rbind(model1_map, model2_map, model3_map)
+
+library(tmap)
+import<- tm_shape(maps_combined) +
+  tm_polygons(
+    col = "value",
+    breaks = c(0,1, 5, 10, 20, 30, 40),
+    title = "Number of import per region",
+    pal = c("#E1F5C4", "#EDE574", "#F9D423", "#FC913A", "#FF4E50","#E16A86"),
+    labels = c("0-1","1-5", "5-10", "10-20", "20-30", "30-40"),
+    legend.is.portrait = TRUE) +
+  tm_layout(
+    frame = TRUE,
+    legend.outside = TRUE,
+    legend.outside.position = "bottom")+
+  tm_facets(by=c("model", "variable"), showNA = FALSE)
+tmap_save(import, filename = "import.png")
 
 
-# Plot: number of imports per region, two panels
-ggplot(maps) +  geom_sf(aes(fill = prop_reg)) + facet_grid(~model)  +     
-  scale_fill_gradient2(na.value = "lightgrey", name = "Nb imports",
-                       low = "white", mid = "lightblue", high = "darkblue") + 
-  #coord_sf(xlim = c(-83.8, -82.2), ylim = c(40.2, 41.3)) +
-  theme_classic(base_size = 9)
+
+
 
 ## ----n_sec_region, warning = FALSE-------------------------------------------------------------------------------
 n_sec_per_reg <- function(finalData, out, burnin){
@@ -297,33 +338,124 @@ n_sec_per_reg <- function(finalData, out, burnin){
                  function(X){
                    X <- factor(X, 1:length(X))
                    return(table(X))})
-  ## Aggregate by region
-  tot_n_sec_reg <- aggregate(n_sec, list(finalData$district), sum)
-  ## Divide by the number of cases in each region
-  tot_n_sec_reg <- cbind(tot_n_sec_reg[, 1], 
-                         tot_n_sec_reg[, -1] / table(finalData$district))
-  return(tot_n_sec_reg)
+  #aggregatge by year
+  # Vector of each season
+ all_season <- unique(finalData$season)
+  # Initialise output (list or dataframe). If dataframe, add one column for the season
+  tot_n_sec_tot<- list()
+  # For each season, compute the number of secondary cases per region
+  for(i in seq_along(all_season)){
+    season_i <- all_season[i]
+    n_sec_i <- n_sec[finalData$season == season_i,]
+    
+    regionnames <- dt_regions$S_NAME
+    n_sec_i <- rbind(n_sec_i,matrix(0,length(regionnames),ncol(n_sec_i)))
+    
+    ## Aggregate by region
+   tot_n_sec_reg_i <- aggregate(n_sec_i, list(c(finalData[season == season_i,
+                                                       district], regionnames)), sum)
+
+    ## Divide by the number of cases in each region
+    tot_n_sec_reg_i <- cbind(tot_n_sec_reg_i[, 1], 
+                             tot_n_sec_reg_i[, -1] / table(finalData[season == season_i,
+                                                                     district]))
+    
+    # Merge tot_n_sec_reg_i with tot_n_sec_tot
+   tot_n_sec_tot [[i]] <- tot_n_sec_reg_i 
+  }
+  
+  return(tot_n_sec_tot)
 }
 
 
 ## Generate the number of secondary cases per case in each region
 n_sec_tot1 <- n_sec_per_reg(finalData = finalData, out = out1, burnin = 5000)
-n_sec_tot2 <- n_sec_per_reg(finalData = finalData, out = out2, burnin = 5000)
-n_sec_tot3 <- n_sec_per_reg(finalData = finalData, out = out3, burnin = 5000)
-## Compute the median in each model
-n_sec1 <- apply(n_sec_tot1[,-1], 1, median)
-n_sec2 <- apply(n_sec_tot2[,-1], 1, median)
-n_sec3 <- apply(n_sec_tot3[,-1], 1, median)
-names(n_sec1) <- names(n_sec2) <- names(n_sec3) <- unique(finalData$district)
-## Add to the matrices describing the maps
-map1$n_sec <- as.numeric(n_sec1[as.character(map1$S_NAME)])
-map2$n_sec <- as.numeric(n_sec2[as.character(map2$S_NAME)])
-map3$n_sec <- as.numeric(n_sec3[as.character(map3$S_NAME)])
+n_sec_tot1<- data.table::rbindlist(n_sec_tot1, idcol = TRUE)
+n_sec_tot1$.id[n_sec_tot1$.id==1] <- "2010/2011"
+n_sec_tot1$.id[n_sec_tot1$.id==2] <- "2011/2012"
+n_sec_tot1$.id[n_sec_tot1$.id==3] <- "2012/2013"
+n_sec_tot1$.id[n_sec_tot1$.id==4] <- "2013/2014"
 
+
+names(n_sec_tot1)[names(n_sec_tot1) == ".id"] <- "season"
+names(n_sec_tot1)[names(n_sec_tot1) =="tot_n_sec_reg_i[, 1]"] <-"S_NAME"
+
+
+n_sec_tot2 <- n_sec_per_reg(finalData = finalData, out = out2, burnin = 5000)
+n_sec_tot2<- data.table::rbindlist(n_sec_tot2, idcol = TRUE)
+n_sec_tot2$.id[n_sec_tot2$.id==1] <- "2010/2011"
+n_sec_tot2$.id[n_sec_tot2$.id==2] <- "2011/2012"
+n_sec_tot2$.id[n_sec_tot2$.id==3] <- "2012/2013"
+n_sec_tot2$.id[n_sec_tot2$.id==4] <- "2013/2014"
+
+
+names(n_sec_tot2)[names(n_sec_tot2) == ".id"] <- "season"
+names(n_sec_tot2)[names(n_sec_tot2) =="tot_n_sec_reg_i[, 1]"] <- "S_NAME"
+
+n_sec_tot3 <- n_sec_per_reg(finalData = finalData, out = out3, burnin = 5000)
+n_sec_tot3<- data.table::rbindlist(n_sec_tot3, idcol = TRUE)
+n_sec_tot3$.id[n_sec_tot3$.id==1] <- "2010/2011"
+n_sec_tot3$.id[n_sec_tot3$.id==2] <- "2011/2012"
+n_sec_tot3$.id[n_sec_tot3$.id==3] <- "2012/2013"
+n_sec_tot3$.id[n_sec_tot3$.id==4] <- "2013/2014"
+
+
+names(n_sec_tot3)[names(n_sec_tot3) == ".id"] <- "season"
+names(n_sec_tot3)[names(n_sec_tot3) =="tot_n_sec_reg_i[, 1]"] <- "S_NAME"
+
+
+## Compute the median in each model
+library(tidyverse)
+n_sec_tot1$n_sec <- apply(n_sec_tot1[,c(-1,-2)], 1, median)
+n_sec_tot_model1<- n_sec_tot1 %>% select(season, S_NAME,n_sec)
+
+
+n_sec_tot2$n_sec <- apply(n_sec_tot2[,c(-1,-2)], 1, median)
+n_sec_tot_model2<- n_sec_tot2 %>% select(season, S_NAME,n_sec)
+
+n_sec_tot3$n_sec <- apply(n_sec_tot3[,c(-1,-2)], 1, median)
+n_sec_tot_model3<- n_sec_tot3 %>% select(season, S_NAME,n_sec)
+
+
+## Add to the matrices describing the maps
+sec_model1_map<- merge(map1, n_sec_tot_model1)
+sec_model2_map<- merge(map2, n_sec_tot_model2)
+sec_model3_map<- merge(map3, n_sec_tot_model3)
 
 ## ----create_maps2, warning = FALSE, fig.width = 6.5, fig.height = 2.5, fig.cap = "Figure 6: Median number of secondary transmission per case in each census tract"----
 # Merge maps
-maps_n_sec <- rbind(map1, map2, map3)
+maps_n_sec <- rbind(sec_model1_map, sec_model2_map, sec_model3_map)
+
+
+secondary<- tm_shape(maps_n_sec) +
+  tm_polygons(
+    col = "n_sec",
+    breaks = c(0, 1, 10, 30, 50, 100),
+    title = "Distribution of the number of secondary cases",
+    pal = c("#E1F5C4", "#EDE574", "#F9D423", "#FC913A", "#FF4E50","#E16A86"),
+    labels = c("0-1","1-10", "10-30", "30-50", "50-100"),
+    legend.is.portrait = TRUE) +
+  tm_layout(
+    frame = FALSE,
+    legend.outside = TRUE,
+    legend.outside.position = "bottom")+
+  tm_facets(by=c("model", "season"), showNA = FALSE)
+
+tmap_save(secondary, filename = "secondary.png")
+
+
+
+
+
+
+
+
+
+
+
+
+
+############################3
 maps_n_sec <- maps_n_sec[maps_n_sec$INTPTLON > lim_lon[1] &
                            maps_n_sec$INTPTLON < lim_lon[2] &
                            maps_n_sec$INTPTLAT > lim_lat[1] & 
