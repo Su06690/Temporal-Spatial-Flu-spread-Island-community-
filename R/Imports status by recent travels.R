@@ -554,11 +554,10 @@ library(MASS)   #negative binomial regression
 
 pop<- read.csv("data/population.csv")  #population by district by year
 hh<-read.csv("data/household_size.csv")  #households by district
+mean_hh<- read.csv("data/mean_hh.csv")  ## mean household per district calculated from 2010 census
 
-
-
-
-df<- merge(pop, hh,  all.x=TRUE)
+#df<- merge(pop, hh,  all.x=TRUE)
+df<-merge(pop,mean_hh, all.x = TRUE)
 df_new<- merge(finalData, df,  all.x=TRUE)
 #df_new<- cbind(df,n_sec_out3)
 df_new$Trans_102[df_new$Ite_102 == 1 | df_new$Ite_102 == 2 | df_new$Ite_102 ==3 ] = "Moderate"
@@ -583,10 +582,12 @@ sum(is.na(df_new$vac))   ##71 missing values
 df_new$vac<- factor(df_new$vac, levels=c(0,1), labels=c("No", "Yes"))
 summary(df_new$vac)
 
+
 #normalization data
 #removing outliers
 
 
+cor(df_new) 
 
 
 # run n regressions
@@ -598,6 +599,7 @@ vac_lms <- lapply(1:ncol(n_sec_out3), function(x) glm.nb(n_sec_out3[,x] ~ df_new
 lms <- lapply(1:ncol(n_sec_out3), function(x) glm.nb(n_sec_out3[,x] ~ df_new$n_age_group+ 
                                                               df_new$vac+ 
                                                        df_new$district_hh+
+                                                       df_new$mean_hh+
                                                        df_new$season+
                                                        df_new$district_pop,
                                                      na.action=na.omit))
@@ -613,7 +615,6 @@ p_values<- lapply(summaries, function(x) x$coefficients[, c(1,4)])
 # ...or r-squared values
 sapply(summaries, function(x) c(r_sq = x$r.squared, 
                                 adj_r_sq = x$adj.r.squared))
-
 
 
 
